@@ -13,9 +13,12 @@ void main() {
 }
 
 const bool kAutoConsume = true;
-
+//productIdが消耗用か非消耗用かを判断するためのid。複数非消耗品があるならリストにするべき。
 const String _kConsumableId = 'consumable';
 const List<String> _kProductIds = <String>[
+  'sample_1',
+  'nhamada.iap.sample.2',
+  'dev.nhamada.sample.3',
   _kConsumableId,
   'upgrade',
   'subscription'
@@ -252,6 +255,7 @@ class _MyAppState extends State<MyApp> {
               leading: CircularProgressIndicator(),
               title: Text('Fetching consumables...'))));
     }
+    //ここ消耗品はすでにアプリ側で管理しているのだから課金可能かどうか(isAvailable)とそのproductIdが消耗品用かどうか(しかも一つでも消耗品が含まれていたら)の判断でreturnする必要はないと思う。。。
     if (!_isAvailable || _notFoundIds.contains(_kConsumableId)) {
       return Card();
     }
@@ -292,6 +296,7 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
+  ///購入状態がpendingにupdateされた時は画面操作できないようにする
   void showPendingUI() {
     setState(() {
       _purchasePending = true;
@@ -334,24 +339,33 @@ class _MyAppState extends State<MyApp> {
   static ListTile buildListCard(ListTile innerTile) =>
       ListTile(title: Card(child: innerTile));
 
+  ///購入状態が更新された時に画面操作不能にしたり、エラーハンドリングしたり、
+  ///消費か非消費かに応じて変数や保存データを更新したりする
   void _listenToPurchaseUpdated(List<PurchaseDetails> purchaseDetailsList) {
     purchaseDetailsList.forEach((PurchaseDetails purchaseDetails) async {
       if (purchaseDetails.status == PurchaseStatus.pending) {
+        //画面操作不能
         showPendingUI();
       } else {
         if (purchaseDetails.status == PurchaseStatus.error) {
+          //エラーハンドリング
           handleError(purchaseDetails.error);
         } else if (purchaseDetails.status == PurchaseStatus.purchased) {
+          //レシート検証
           bool valid = await _verifyPurchase(purchaseDetails);
           if (valid) {
             deliverProduct(purchaseDetails);
           } else {
+            //レシートが正しくない時のハンドリング
             _handleInvalidPurchase(purchaseDetails);
           }
         }
         if (Platform.isIOS) {
+          //iOSは購入成功したか、失敗したかなどのどの状態の時でも状態を返却する必要がある?ので、
+          // これをコール。AndroidだとErrorになる。
           InAppPurchaseConnection.instance.completePurchase(purchaseDetails);
         } else if (Platform.isAndroid) {
+          //
           if (!kAutoConsume && purchaseDetails.productID == _kConsumableId) {
             InAppPurchaseConnection.instance.consumePurchase(purchaseDetails);
           }
